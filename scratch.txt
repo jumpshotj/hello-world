@@ -1,1 +1,48 @@
-asdg
+== data import ==
+- create tables ("create table lineitem (...);")
+- create index (converts to column store):
+CREATE CLUSTERED COLUMNSTORE INDEX <index name> ON <table name>;
+(e.g.) CREATE CLUSTERED COLUMNSTORE INDEX lineitem_cci ON lineitem;
+- download bcp utility (https://go.microsoft.com/fwlink/?linkid=2043518)
+- run following in powershell:
+bcp <database.schema.table> in "<datafile path>" -c -C "RAW" -h "TABLOCK" -r "0x0a" -t "|" -T -b 1048576
+(e.g.) bcp tpch.dbo.LINEITEM in "C:\dataset-sf30\lineitem.tbl" -c -C "RAW" -h "TABLOCK" -r "0x0a" -t "|" -T -b 1048576
+- can open multiple shell windows and run bcp commands for each table at the same time? (maybe?)
+
+== checking data in db ==
+- check cci is created:
+select * from sys.indexes where object_id = OBJECT_ID('<table name>');
+  --> check that "type_desc" column says "CLUSTERED COLUMNSTORE"
+- view row groups created:
+select * from sys.column_store_row_groups where object_id = OBJECT_ID('<table name>');
+  --> all/most rows should have "delta_store_hobt_id"=NULL and "state_description"=COMPRESSED (except small tables)
+- view row groups in detail (physical storage):
+select * from sys.dm_db_column_store_row_group_physical_stats where object_id = OBJECT_ID('<table name>');
+  --> check that "total_rows" is large (>500K) and somewhat consistent
+
+
+== viewing statistics/exec plan ==
+- SET STATISTICS TIME, SET STATISTICS IO
+  --> will show stats in message output like this:
+  
+(3 rows affected)
+Table 'LINEITEM'. Scan count 24, logical reads 0, physical reads 0, read-ahead reads 0, lob logical reads 23628, lob physical reads 15, lob read-ahead reads 20798.
+Table 'LINEITEM'. Segment reads 1, segment skipped 285.
+
+SQL Server Execution Times:
+   CPU time = 16 ms,  elapsed time = 121 ms.
+SQL Server parse and compile time: 
+   CPU time = 0 ms, elapsed time = 0 ms.
+   
+- IO stats explanation:
+  - scan count: number of scans (multiple if parallelism > 1)
+  - logical reads: read off buffer pool
+  - physical reads: disk read
+  - read-ahead reads: pages read-ahead (prefetched into cache)
+
+- clearing data pool/cache:
+DBCC DROPCLEANBUFFERS;
+
+- checking data pool/cahe:
+select * from sys.dm_column_store_object_pool where object_id = OBJECT_ID('<table name>');
+  --> should be empty after DBCC
