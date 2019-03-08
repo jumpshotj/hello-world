@@ -22,7 +22,11 @@ select * from sys.dm_db_column_store_row_group_physical_stats where object_id = 
 
 
 == viewing statistics/exec plan ==
-- SET STATISTICS TIME, SET STATISTICS IO
+- viewing exec plan (in management studio)
+  --> right-click on query window, check "Include Live Query Statistics", then execute query
+- viewing time/io stats
+SET STATISTICS TIME, SET STATISTICS IO
+  --> can also set to always show in management studio ("Query Options")
   --> will show stats in message output like this:
   
 (3 rows affected)
